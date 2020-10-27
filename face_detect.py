@@ -1,8 +1,8 @@
-from facenet_pytorch import MTCNN, InceptionResnetV1
+# from facenet_pytorch import MTCNN, InceptionResnetV1
 from keras.applications.inception_resnet_v2 import InceptionResNetV2, decode_predictions
-from keras.models import Model
-from keras.layers import Conv2D, Input, Dense, Flatten, MaxPooling2D, BatchNormalization, Dropout, LeakyReLU, Concatenate
-from keras.optimizers import Adam
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Conv2D, Input, Dense, Flatten, MaxPooling2D, BatchNormalization, Dropout, LeakyReLU, Concatenate
+from tensorflow.keras.optimizers import Adam
 import cv2
 from PIL import Image
 import os
@@ -13,10 +13,10 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
-
 def radimal_mean(src):
 
     dft = np.fft.fft(src)  # Discrete Fourier transforms
+    # 출처 :
     f = src
     sx, sy = f.shape
     X, Y = np.ogrid[0:sx, 0:sy]
@@ -36,24 +36,25 @@ def normalize(src):
     src = cv2.normalize(src, src, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     return src
 
-class Face_Detection:
-
-    def __init__(self, path):
-        self.path = path
-
-    def save_face_image(self, name): # MTCNN
-        self.name = name
-
-        cap = cv2.VideoCapture(self.path + self.name)
-        mtcnn = MTCNN(select_largest=False, margin=20,device='cuda')
-
-        ret, frame = cap.read()
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame = Image.fromarray(frame)
-
-        face = mtcnn(frame, save_path='img/face_image_' + self.name + '.jpg')
-
-        return face
+# Pytorch를 쓰면 GPU 사용시 에러발생
+# class Face_Detection:
+#
+#     def __init__(self, path):
+#         self.path = path
+#
+#     def save_face_image(self, name): # MTCNN
+#         self.name = name
+#
+#         cap = cv2.VideoCapture(self.path + self.name)
+#         mtcnn = MTCNN(select_largest=False, device='cuda')
+#
+#         ret, frame = cap.read()
+#         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+#         frame = Image.fromarray(frame)
+#
+#         face = mtcnn(frame, save_path='img/face_image_' + self.name + '.jpg')
+#
+#         return face
 
 class svm:
 
@@ -121,16 +122,16 @@ class MesoInception4:
         optimizer = Adam(learning_rate=0.001)
         self.data = []
         self.y = []
-        self.size = 160
+        self.size = 256
         self.model = self.init_model()
+
         self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy'])
 
     def load_data(self, path_img, label):
 
         img = cv2.imread(path_img, cv2.IMREAD_COLOR)
+        img = cv2.resize(img, (self.size, self.size)) # Default = Bilinear interpolation
 
-        # pad_img = np.stack([np.pad(img[:,:,i], 48, 'constant', constant_values=0) for i in range(3)])
-        # pad_img = np.transpose(pad_img, (1, 2, 0))
         pad_img = np.reshape(img, (1, self.size, self.size, 3))
 
         if(len(self.data) == 0):
@@ -193,26 +194,40 @@ class MesoInception4:
 
         return Model(inputs=ipt, outputs=opt)
 
+    def load_model(self, filename):
+        self.model.load_weights(filename)
+
     def predict(self, x):
         return self.model.predict(x)
     def train(self):
         x = self.train_x
         y = self.train_y
-        self.model.fit(x, y, epochs=5, batch_size=32)
+        self.model.fit(x, y, epochs=50, batch_size=64)
+        self.model.save('mesoinception4.h5')
+
+
     def test(self):
         x = self.test_x
         y = self.test_y
         res = self.model.evaluate(x, y)
-        print(res)
+        print('Accuracy: %.2f ' % res[1])
         zeros = np.zeros(y.shape)
         print('All zeros Accuracy: %.2f' % accuracy_score(self.test_y, zeros))
     def load(self, path):
         self.model.load_weights(path)
 
     def split_data(self):
-        self.train_x, self.test_x, self.train_y, self.test_y = train_test_split(self.data, self.y, test_size=0.2,
-                                                                                    random_state=252)
+        self.train_x, self.test_x, self.train_y, self.test_y = train_test_split(self.data, self.y, test_size=0.3,
+                                                                                    random_state=1)
         # print(self.train_x.shape, self.test_x.shape, self.train_y.shape, self.test_y.shape)
+
+def build_data(meso, path, rag, realfake):
+    File_List = os.listdir(path)
+    for i in rag:
+        try:
+            meso.load_data(path + File_List[i], realfake)
+        except:
+            print(path + File_List[i], " is error ")
 
 if __name__ == '__main__':
 
@@ -221,15 +236,13 @@ if __name__ == '__main__':
     rj = read_json()
     # label, original = read_json(path_dir).read(File_List[0])
     y = []
-    fd = Face_Detection(path_dir)
 
     # 얼굴 이미지로 저장
+    # fd = Face_Detection(path_dir)
     # for i in range(len(File_List)):
     #     face = fd.save_face_image(File_List[i])
 
-
     #######SVM
-    ec = 0
     # for i in range(1):#len(File_List)):
 
         # try:
@@ -244,20 +257,25 @@ if __name__ == '__main__':
     ##########
 
     ########## Mesonet
-
     meso = MesoInception4()
-    for i in range(len(File_List)):
-        try:
-            label, original = rj.read(File_List[i])
-            meso.load_data('img/face_image_' + File_List[i] + '.jpg', label)
-        except:
-            # print(File_List[i], " is error {0}".format(ec))
-            ec += 1
+    ec = 0
+    ## DFDC 데이터
+    # for i in range(len(File_List)):
+    #     try:
+    #         label, original = rj.read(File_List[i])
+    #         meso.load_data('img/face_image_' + File_List[i] + '.jpg', label)
+    #     except:
+    #         print(File_List[i], " is error {0}".format(ec))
+    #         ec += 1
+
+    ## other data 각각 학습에 이용할 데이터의 숫자
+    size = range(500)
+    build_data(meso, "Data/Fake1/", size, "FAKE")
+    build_data(meso, "Data/Fake2/", size, "FAKE")
+    build_data(meso, "Data/Real1/", size, "REAL")
+    build_data(meso, "Data/Real2/", size, "REAL")
 
     meso.split_data()
     meso.train()
+    # meso.load_model('12000.h5')
     meso.test()
-
-
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # device
