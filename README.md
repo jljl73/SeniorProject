@@ -3,6 +3,8 @@
 
 ## DeepFake Detection
 
-사용된 데이터 : https://www.kaggle.com/c/deepfake-detection-challenge/overview
+사용된 데이터 : https://www.kaggle.com/c/deepfake-detection-challenge/overview +
+               https://arxiv.org/abs/1911.00686
+
 
 참고 논문 : Deep Learning for Deepfakes Creation and Detection: A Survey (Thanh Thi Nguyen, Cuong M. Nguyen, Dung Tien Nguyen, Duc Thanh Nguyen, Saeid Nahavandi, Fellow, IEEE)
